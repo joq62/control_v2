@@ -26,29 +26,33 @@
 %% Returns: ok |{error,Err}
 %% --------------------------------------------------------------------
 deploy_app(AppId,AppVsn)->
-    Result=case if_db:deployment_spec_read(AppId,AppVsn) of
-	       []->
-		   {error,[eexists,AppId,AppVsn,?MODULE,?LINE]};
-	       DeploymentInfo->
-		   [{AppId,AppVsn,Restriction,ServiceList}]=DeploymentInfo,
-		   case Restriction of
-		       no_restrictions->
-			   [{"iaas",_,_HostId,_VmId,IaasVm}|_]=if_db:sd_read("iaas"),
-			   {ok,WorkerHostId,WorkerVmId}=rpc:call(IaasVm,iaas,allocate_vm,[],5000),
-			   StartResult=[{service:create(ServiceId,ServiceVsn,WorkerHostId,WorkerVmId),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
-			   case [Result||{Result,ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}<-StartResult,
-					 Result/=ok] of
-			       []-> %ok!
-				   [if_db:sd_create(ServiceId,ServiceVsn,WorkerHostId,WorkerVmId,list_to_atom(WorkerHostId++"@"++WorkerVmId))||{ok,ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}<-StartResult],
-				   StartResult;
-			       _->
-				   StartResult
-			   end;
-		       _ ->
-			   {error,[not_implemented,?MODULE,?LINE]}
-		   end
-	   end,
-    Result.
+    DeployResult=case if_db:deployment_spec_read(AppId,AppVsn) of
+		     []->
+			 {error,[eexists,AppId,AppVsn,?MODULE,?LINE]};
+		     DeploymentInfo->
+			 [{AppId,AppVsn,Restriction,ServiceList}]=DeploymentInfo,
+			 case Restriction of
+			     no_restrictions->
+				 [{"iaas",_,_HostId,_VmId,IaasVm}|_]=if_db:sd_read("iaas"),
+				 {ok,WorkerHostId,WorkerVmId}=rpc:call(IaasVm,iaas,allocate_vm,[],5000),
+				 StartResult=[{service:create(ServiceId,ServiceVsn,WorkerHostId,WorkerVmId),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
+				 case [Result||{Result,_ServiceId,_ServiceVsn,_WorkerHostId,_WorkerVmId}<-StartResult,
+					       Result/=ok] of
+				     []-> %ok!
+					 [if_db:sd_create(YServiceId,YServiceVsn,YWorkerHostId,YWorkerVmId,list_to_atom(YWorkerVmId++"@"++YWorkerHostId))||{ok,YServiceId,YServiceVsn,YWorkerHostId,YWorkerVmId}<-StartResult],
+					 SdList=[{ZServiceId,ZServiceVsn,list_to_atom(ZWorkerVmId++"@"++ZWorkerHostId)}||{ok,ZServiceId,ZServiceVsn,ZWorkerHostId,ZWorkerVmId}<-StartResult],
+					 DeplId={node(),erlang:system_time()},
+					 if_db:deployment_create(DeplId,AppId,AppVsn,date(),time(),WorkerHostId,WorkerVmId,SdList,tabort),
+					 {ok,DeplId};
+				     _->
+					 {error,[StartResult]}
+				 end;
+			     _ ->
+				 {error,[not_implemented,?MODULE,?LINE]}
+			 end
+		 end,
+    
+    DeployResult.
 
 %% --------------------------------------------------------------------
 %% Function:create(ServiceId,Vsn,HostId,VmId)
@@ -57,7 +61,17 @@ deploy_app(AppId,AppVsn)->
 %% --------------------------------------------------------------------
 
 depricate_app(DeplId)->
-    not_implemented.
+    Result= case if_db:deployment_read(DeplId) of
+		[]->
+		    {error,[eexists,DeplId]};
+		DeploymentInfo->
+		    {_DeplId,_SpecId,_Vsn,_Date,_Time,HostId,VmId,SdList,_Status}=DeploymentInfo,
+		    [if_db:sd_delete(ServiceId,ServiceVsn,ServiceVm)||{ServiceId,ServiceVsn,ServiceVm}<-SdList],
+		    [IaasVm]=if_db:sd_get("iaas"),
+		    ok=rpc:call(IaasVm,vm,free,[list_to_atom(VmId++"@"++HostId)],10000),
+		    ok
+	    end,
+    Result.
 
 %% --------------------------------------------------------------------
 %% Function:create(ServiceId,Vsn,HostId,VmId)
