@@ -15,7 +15,9 @@
 	 depricate_app/1,
 	 create_spec/4,
 	 read_spec/2,
-	 delete_spec/2]).
+	 delete_spec/2,
+	 check_update/0
+	]).
 
 %% ====================================================================
 %% External functions
@@ -67,6 +69,7 @@ depricate_app(DeplId)->
 		DeploymentInfo->
 		    {_DeplId,_SpecId,_Vsn,_Date,_Time,HostId,VmId,SdList,_Status}=DeploymentInfo,
 		    [if_db:sd_delete(ServiceId,ServiceVsn,ServiceVm)||{ServiceId,ServiceVsn,ServiceVm}<-SdList],
+		    if_db:deployment_delete(DeplId),
 		    [IaasVm]=if_db:sd_get("iaas"),
 		    ok=rpc:call(IaasVm,vm,free,[list_to_atom(VmId++"@"++HostId)],10000),
 		    ok
@@ -101,3 +104,47 @@ delete_spec(AppId,AppVsn)->
 %% 
 %%
 %% --------------------------------------------------------------------
+check_update()->
+    Deployment_to_start =case if_db:deployment_read_all() of
+			     []->
+				 [];
+			     DeploymentInfoList ->  %[{DeplId,SpecId,Vsn,Date,Time,HostId,VmId,SdList,_Status}]
+				 
+				 check(DeploymentInfoList,[])
+			 end,
+    
+    Deployment_to_start.
+
+check([],CheckResult)->
+    CheckResult;			 
+check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
+      
+    NewAcc=case net_adm:ping(list_to_atom(VmId++"@"++HostId)) of
+	       pong-> %ok
+		   case do_ping(SdList,ok) of
+		       ok->
+			   Acc;
+		       error ->
+			   R=deploy_app(AppId,AppVsn),
+			   depricate_app(DeplId),
+			   [R|Acc]		
+		   end;
+	       _ ->
+		   R=deploy_app(AppId,AppVsn),
+		   depricate_app(DeplId),
+		   [R|Acc]	
+	   end,
+    check(T,NewAcc).
+    
+do_ping([],R)->
+    R;
+do_ping(_,error)->
+    error;
+do_ping([{ServiceId,_ServiceVsn,Vm}|T],_)->
+    Result=case rpc:call(Vm,list_to_atom(ServiceId),ping,[],2000) of
+	       {pong,_,_}->
+		   ok;
+	       _ ->
+		   error
+	   end,
+    do_ping(T,Result).

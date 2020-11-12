@@ -24,7 +24,7 @@
 %% --------------------------------------------------------------------
 %% Definitions 
 %% --------------------------------------------------------------------
--define(HbInterval,40*1000).
+-define(HbInterval,30*1000).
 
 -export([create_service/4,delete_service/4,
 	 create_deployment_spec/3,
@@ -204,7 +204,8 @@ code_change(_OldVsn, State, _Extra) ->
 %% Returns: non
 %% --------------------------------------------------------------------
 h_beat(Interval)->
-%    
+    R=rpc:call(node(),deployment,check_update,[],20*1000),
+    io:format("~p~n",[{R,time(),?MODULE,?LINE}]),
     timer:sleep(Interval),
 %    Result=rpc:call(node(),orchistrate,simple_campaign,[],15*1000),
     Result=glurk,
