@@ -11,7 +11,8 @@
 %% --------------------------------------------------------------------
 
 %-compile(export_all).
--export([deploy_app/2,
+-export([orphans/0,
+	 deploy_app/2,
 	 depricate_app/1,
 	 create_spec/4,
 	 read_spec/2,
@@ -22,6 +23,58 @@
 %% ====================================================================
 %% External functions
 %% ====================================================================
+
+%% --------------------------------------------------------------------
+%% Function:create(ServiceId,Vsn,HostId,VmId)
+%% Description: Starts vm and deploys services 
+%% Returns: ok |{error,Err}
+%% --------------------------------------------------------------------
+
+orphans()->
+    % Active services
+    AllServices=if_db:sd_read_all(), %{"control","1.0.0","asus","10250",'10250@asus'},
+    Ping=[{rpc:call(Vm,list_to_atom(ServiceId),ping,[],5000),ServiceId,Vsn,HostId,VmId,Vm}||{ServiceId,Vsn,HostId,VmId,Vm}<-AllServices],
+    ActiveService=[{ServiceId,Vsn,HostId,VmId,Vm}||{{pong,_,_},ServiceId,Vsn,HostId,VmId,Vm}<-Ping],
+ %   io:format("ActiveService = ~p~n",[{ActiveService,?MODULE,?LINE}]),
+    Result= case if_db:deployment_read_all() of
+		[]->
+%		    io:format(" = ~p~n",[{?MODULE,?LINE}]),
+		    [if_db:sd_delete(ServiceId,ServiceVsn,ServiceVm)||{ServiceId,ServiceVsn,_HostId,_VmId,ServiceVm}<-ActiveService],
+		    [IaasVm]=if_db:sd_get("iaas"),
+		    [rpc:call(IaasVm,vm,free,[Vm],10000)||{_ServiceId,_Vsn,_HostId,_VmId,Vm}<-ActiveService],
+		    Orphans=ActiveService,
+		    {ok,Orphans};
+		Deployments ->
+%		    io:format("Deployments = ~p~n",[{Deployments,?MODULE,?LINE}]),
+		    % Remove all services that are present in Deployments
+		    % Deployments=[{DeplId,SpecId,Vsn,Date,Time,HostId,VmId,SdList,Status}]
+		    % SdList=[{"control","1.0.0",'10250@asus'}]
+		    % ActiveService={ServiceId,Vsn,HostId,VmId,Vm}
+		    
+		    ListOfSdLists=[SdList||{_DeplId,_SpecId,_Vsn,_Date,_Time,_HostId,_VmId,SdList,_Status}<-Deployments],
+		    WantedService=lists:append(ListOfSdLists),
+		 %   io:format("WantedService = ~p~n",[{WantedService,?MODULE,?LINE}]),
+		    Orphans=remove_orphan(ActiveService,WantedService,[]),
+		    {ok,Orphans}
+	    end,
+    Result.
+
+remove_orphan([],_,Orphans)->
+    Orphans;
+remove_orphan([{ServiceId,ServiceVsn,_HostId,_VmId,ServiceVm}|T],WantedService,Acc)->
+    NewAcc=case lists:member({ServiceId,ServiceVsn,ServiceVm},WantedService) of
+	       false->
+		%   io:format("remove = ~p~n",[{ServiceId,ServiceVsn,ServiceVm,?MODULE,?LINE}]),
+		   if_db:sd_delete(ServiceId,ServiceVsn,ServiceVm),
+		   [IaasVm]=if_db:sd_get("iaas"),
+		   rpc:call(IaasVm,vm,free,[ServiceVm],10000),
+		   [{remove,ServiceId,ServiceVsn,ServiceVm}|Acc];
+	       true ->
+		   Acc
+    end,
+    remove_orphan(T,WantedService,NewAcc).
+    
+    
 %% --------------------------------------------------------------------
 %% Function:create(ServiceId,Vsn,HostId,VmId)
 %% Description: Starts vm and deploys services 
@@ -130,6 +183,7 @@ check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
 			   [R|Acc]		
 		   end;
 	       _ ->
+		   [if_db:sd_delete(ServiceId,ServiceVsn,Vm)||{ServiceId,ServiceVsn,Vm}<-SdList],
 		   R=deploy_app(AppId,AppVsn),
 		   depricate_app(DeplId),
 		   [R|Acc]	
@@ -140,11 +194,12 @@ do_ping([],R)->
     R;
 do_ping(_,error)->
     error;
-do_ping([{ServiceId,_ServiceVsn,Vm}|T],_)->
+do_ping([{ServiceId,ServiceVsn,Vm}|T],_)->
     Result=case rpc:call(Vm,list_to_atom(ServiceId),ping,[],2000) of
 	       {pong,_,_}->
 		   ok;
 	       _ ->
+		   if_db:sd_delete(ServiceId,ServiceVsn,Vm),
 		   error
 	   end,
     do_ping(T,Result).

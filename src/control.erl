@@ -205,7 +205,9 @@ code_change(_OldVsn, State, _Extra) ->
 %% --------------------------------------------------------------------
 h_beat(Interval)->
     R=rpc:call(node(),deployment,check_update,[],20*1000),
-    io:format("~p~n",[{R,time(),?MODULE,?LINE}]),
+  %  io:format("~p~n",[{R,time(),?MODULE,?LINE}]),
+    Orphans=rpc:call(node(),deployment,orphans,[],20*1000),
+  %  io:format("Orphans = ~p~n",[{Orphans,time(),?MODULE,?LINE}]),
     timer:sleep(Interval),
 %    Result=rpc:call(node(),orchistrate,simple_campaign,[],15*1000),
     Result=glurk,
