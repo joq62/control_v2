@@ -90,7 +90,7 @@ deploy_app(AppId,AppVsn)->
 			     no_restrictions->
 				 [{"iaas",_,_HostId,_VmId,IaasVm}|_]=if_db:sd_read("iaas"),
 				 {ok,WorkerHostId,WorkerVmId}=rpc:call(IaasVm,iaas,allocate_vm,[],5000),
-				 StartResult=[{service:create(ServiceId,ServiceVsn,WorkerHostId,WorkerVmId),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
+				 StartResult=[{rpc:call(node(),service,create,[ServiceId,ServiceVsn,WorkerHostId,WorkerVmId],2*5000),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
 				 case [Result||{Result,_ServiceId,_ServiceVsn,_WorkerHostId,_WorkerVmId}<-StartResult,
 					       Result/=ok] of
 				     []-> %ok!
@@ -100,6 +100,7 @@ deploy_app(AppId,AppVsn)->
 					 if_db:deployment_create(DeplId,AppId,AppVsn,date(),time(),WorkerHostId,WorkerVmId,SdList,tabort),
 					 {ok,DeplId};
 				     _->
+					 rpc:call(IaasVm,iaas,free_vm,[list_to_atom(WorkerVmId++"@"++WorkerHostId)],5000),
 					 {error,[StartResult]}
 				 end;
 			     _ ->
@@ -157,6 +158,9 @@ delete_spec(AppId,AppVsn)->
 %% 
 %%
 %% --------------------------------------------------------------------
+
+
+
 check_update()->
     Deployment_to_start =case if_db:deployment_read_all() of
 			     []->
@@ -178,15 +182,25 @@ check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
 		       ok->
 			   Acc;
 		       error ->
-			   R=deploy_app(AppId,AppVsn),
-			   depricate_app(DeplId),
+			   R=case deploy_app(AppId,AppVsn) of
+				 {ok,NewDeplId}->
+				     depricate_app(DeplId),
+				     {ok,NewDeplId};
+				 {error,Err}->
+				     {error,Err}
+			     end,
 			   [R|Acc]		
 		   end;
 	       _ ->
 		   [if_db:sd_delete(ServiceId,ServiceVsn,Vm)||{ServiceId,ServiceVsn,Vm}<-SdList],
-		   R=deploy_app(AppId,AppVsn),
-		   depricate_app(DeplId),
-		   [R|Acc]	
+		   R=case deploy_app(AppId,AppVsn) of
+			 {ok,NewDeplId}->
+			     depricate_app(DeplId),
+			     {ok,NewDeplId};
+			 {error,Err}->
+			     {error,Err}
+		     end,
+		   [R|Acc]
 	   end,
     check(T,NewAcc).
     
