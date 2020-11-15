@@ -184,7 +184,8 @@ check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
 		       error ->
 			   R=case deploy_app(AppId,AppVsn) of
 				 {ok,NewDeplId}->
-				     depricate_app(DeplId),
+				     if_db:deployment_delete(DeplId),
+				     %depricate_app(DeplId),
 				     {ok,NewDeplId};
 				 {error,Err}->
 				     {error,Err}
@@ -195,7 +196,8 @@ check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
 		   [if_db:sd_delete(ServiceId,ServiceVsn,Vm)||{ServiceId,ServiceVsn,Vm}<-SdList],
 		   R=case deploy_app(AppId,AppVsn) of
 			 {ok,NewDeplId}->
-			     depricate_app(DeplId),
+			     if_db:deployment_delete(DeplId),
+			     %depricate_app(DeplId),
 			     {ok,NewDeplId};
 			 {error,Err}->
 			     {error,Err}
