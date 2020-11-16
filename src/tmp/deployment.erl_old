@@ -90,8 +90,8 @@ deploy_app(AppId,AppVsn)->
 			     no_restrictions->
 				 [{"iaas",_,_HostId,_VmId,IaasVm}|_]=if_db:sd_read("iaas"),
 			%	 {ok,WorkerHostId,WorkerVmId}=ensure_not_reactivated_vm(),
-				 {ok,WorkerHostId,WorkerVmId}=rpc:call(IaasVm,iaas,allocate_vm,[],2*5000), 
-				 StartResult=[{rpc:call(node(),service,create,[ServiceId,ServiceVsn,WorkerHostId,WorkerVmId],1*60*5000),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
+				 {ok,WorkerHostId,WorkerVmId}=rpc:call(IaasVm,iaas,allocate_vm,[],5000), 
+				 StartResult=[{rpc:call(node(),service,create,[ServiceId,ServiceVsn,WorkerHostId,WorkerVmId],2*5000),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
 				 case [Result||{Result,_ServiceId,_ServiceVsn,_WorkerHostId,_WorkerVmId}<-StartResult,
 					       Result/=ok] of
 				     []-> %ok!
@@ -100,8 +100,7 @@ deploy_app(AppId,AppVsn)->
 					 DeplId={node(),erlang:system_time()},
 					 if_db:deployment_create(DeplId,AppId,AppVsn,date(),time(),WorkerHostId,WorkerVmId,SdList,started),
 					 {ok,DeplId};
-				    _->
-					 io:format("Error StartResult = ~p~n",[{StartResult,?MODULE,?LINE}]), 
+				     _->
 					 rpc:call(IaasVm,iaas,free_vm,[list_to_atom(WorkerVmId++"@"++WorkerHostId)],5000),
 					 {error,[StartResult]}
 				 end;
@@ -214,29 +213,25 @@ check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
 			   io:format("Services running = ~p~n",[{list_to_atom(VmId++"@"++HostId),?MODULE,?LINE}]), 
 			   Acc;
 		       error ->
-			   
-			   R=case rpc:call(node(),control,deploy_app,[AppId,AppVsn]) of
+			   R=case deploy_app(AppId,AppVsn) of
 				 {ok,NewDeplId}->
 				     io:format("NewDeplId = ~p~n",[{NewDeplId,?MODULE,?LINE}]), 
-				     rpc:call(node(),control,delete_deployment,[DeplId],5000),
+				     if_db:deployment_delete(DeplId),
 				     %depricate_app(DeplId),
 				     {ok,NewDeplId};
 				 {error,Err}->
 				     io:format(" {error,Err} = ~p~n",[{ {error,Err},?MODULE,?LINE}]), 
-				     {error,Err};
-				 {badrpc,Err}->
-				     io:format(" {badrpc,Err} = ~p~n",[{ {badrpc,Err},?MODULE,?LINE}]),
-				     {error,Err} 
+				     {error,Err}
 			     end,
 			   [R|Acc]		
 		   end;
 	       pang ->
 		   io:format("pang = ~p~n",[{ pang,?MODULE,?LINE}]), 
 		   [if_db:sd_delete(ServiceId,ServiceVsn,Vm)||{ServiceId,ServiceVsn,Vm}<-SdList],
-		   R=case  rpc:call(node(),control,deploy_app,[AppId,AppVsn]) of
+		   R=case deploy_app(AppId,AppVsn) of
 			 {ok,NewDeplId}->
 			     io:format("NewDeplId = ~p~n",[{NewDeplId,?MODULE,?LINE}]), 
-			     rpc:call(node(),control,deployment_delete_deployment,[DeplId],5000),
+			     if_db:deployment_delete(DeplId),
 			     %depricate_app(DeplId),
 			     {ok,NewDeplId};
 			 {error,Err}->
@@ -244,7 +239,7 @@ check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
 			     {error,Err};
 			 {badrpc,Err}->
 			     io:format(" {badrpc,Err} = ~p~n",[{ {badrpc,Err},?MODULE,?LINE}]), 
-			     {error,Err}
+			     {error,Err} ->
 		     end,
 		   [R|Acc]
 	   end,

@@ -31,7 +31,8 @@
 	 delete_deployment_spec/2,
 	 read_deployment_spec/2,
 	 deploy_app/2,
-	 depricate_app/1
+	 depricate_app/1,
+	 delete_deployment/1
 	]).
 
 -export([start/0,
@@ -70,6 +71,9 @@ deploy_app(AppId,AppVsn)->
     gen_server:call(?MODULE, {deploy_app,AppId,AppVsn},infinity).
 depricate_app(DeploymentId)->
     gen_server:call(?MODULE, {depricate_app,DeploymentId},infinity).
+delete_deployment(DeploymentId)->
+    gen_server:call(?MODULE, {delete_deployment,DeploymentId},infinity).
+    
 create_deployment_spec(AppId,AppVsn,ServiceList)->
     gen_server:call(?MODULE, {create_deployment_spec,AppId,AppVsn,ServiceList},infinity).
 delete_deployment_spec(AppId,AppVsn)->
@@ -128,6 +132,9 @@ handle_call({deploy_app,AppId,AppVsn},_From,State) ->
 
 handle_call({depricate_app,DeploymentId},_From,State) ->
     Reply=rpc:call(node(),deployment,depricate_app,[DeploymentId],5000),
+    {reply, Reply, State};
+handle_call({delete_deployment,DeploymentId},_From,State) ->
+    Reply=if_db:deployment_delete(DeploymentId),
     {reply, Reply, State};
 
 handle_call({create_deployment_spec,AppId,AppVsn,ServiceList},_From,State) ->
