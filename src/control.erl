@@ -215,6 +215,15 @@ h_beat(Interval)->
     io:format("deployment,check_update ~p~n",[{R,time(),?MODULE,?LINE}]),
    % Orphans=rpc:call(node(),deployment,orphans,[],20*1000),
   %  io:format("Orphans = ~p~n",[{Orphans,time(),?MODULE,?LINE}]),
+  
+   
+    
+
+
+
+
+
+
     timer:sleep(Interval),
 %    Result=rpc:call(node(),orchistrate,simple_campaign,[],15*1000),
     Result=glurk,

@@ -90,25 +90,21 @@ deploy_app(AppId,AppVsn)->
 			     no_restrictions->
 				 [{"iaas",_,_HostId,_VmId,IaasVm}|_]=if_db:sd_read("iaas"),
 			%	 {ok,WorkerHostId,WorkerVmId}=ensure_not_reactivated_vm(),
-				case rpc:call(IaasVm,iaas,allocate_vm,[],2*5000) of
-				     {ok,WorkerHostId,WorkerVmId}->
-					StartResult=[{rpc:call(node(),service,create,[ServiceId,ServiceVsn,WorkerHostId,WorkerVmId],1*60*5000),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
-					case [Result||{Result,_ServiceId,_ServiceVsn,_WorkerHostId,_WorkerVmId}<-StartResult,
-						      Result/=ok] of
-					    []-> %ok!
-						[if_db:sd_create(YServiceId,YServiceVsn,YWorkerHostId,YWorkerVmId,list_to_atom(YWorkerVmId++"@"++YWorkerHostId))||{ok,YServiceId,YServiceVsn,YWorkerHostId,YWorkerVmId}<-StartResult],
-						SdList=[{ZServiceId,ZServiceVsn,list_to_atom(ZWorkerVmId++"@"++ZWorkerHostId)}||{ok,ZServiceId,ZServiceVsn,ZWorkerHostId,ZWorkerVmId}<-StartResult],
-						DeplId={node(),erlang:system_time()},
-						if_db:deployment_create(DeplId,AppId,AppVsn,date(),time(),WorkerHostId,WorkerVmId,SdList,started),
-						{ok,DeplId};
-					    _->
-						io:format("Error StartResult = ~p~n",[{StartResult,?MODULE,?LINE}]), 
-						rpc:call(IaasVm,iaas,free_vm,[list_to_atom(WorkerVmId++"@"++WorkerHostId)],5000),
-						{error,[StartResult]}
-					end;
-				    {error,Err}->
-					{error,Err}
-				end;
+				 {ok,WorkerHostId,WorkerVmId}=rpc:call(IaasVm,iaas,allocate_vm,[],2*5000), 
+				 StartResult=[{rpc:call(node(),service,create,[ServiceId,ServiceVsn,WorkerHostId,WorkerVmId],1*60*5000),ServiceId,ServiceVsn,WorkerHostId,WorkerVmId}||{ServiceId,ServiceVsn}<-ServiceList],
+				 case [Result||{Result,_ServiceId,_ServiceVsn,_WorkerHostId,_WorkerVmId}<-StartResult,
+					       Result/=ok] of
+				     []-> %ok!
+					 [if_db:sd_create(YServiceId,YServiceVsn,YWorkerHostId,YWorkerVmId,list_to_atom(YWorkerVmId++"@"++YWorkerHostId))||{ok,YServiceId,YServiceVsn,YWorkerHostId,YWorkerVmId}<-StartResult],
+					 SdList=[{ZServiceId,ZServiceVsn,list_to_atom(ZWorkerVmId++"@"++ZWorkerHostId)}||{ok,ZServiceId,ZServiceVsn,ZWorkerHostId,ZWorkerVmId}<-StartResult],
+					 DeplId={node(),erlang:system_time()},
+					 if_db:deployment_create(DeplId,AppId,AppVsn,date(),time(),WorkerHostId,WorkerVmId,SdList,started),
+					 {ok,DeplId};
+				    _->
+					 io:format("Error StartResult = ~p~n",[{StartResult,?MODULE,?LINE}]), 
+					 rpc:call(IaasVm,iaas,free_vm,[list_to_atom(WorkerVmId++"@"++WorkerHostId)],5000),
+					 {error,[StartResult]}
+				 end;
 			     _ ->
 				 {error,[not_implemented,?MODULE,?LINE]}
 			 end
@@ -116,6 +112,37 @@ deploy_app(AppId,AppVsn)->
     
     DeployResult.
 
+ensure_not_reactivated_vm()->
+    AllDeployments=if_db:deployment_read_all(),
+    [{"iaas",_,_HostId,_VmId,IaasVm}|_]=if_db:sd_read("iaas"),
+    ensure_not_reactivated_vm(AllDeployments,IaasVm,check).
+
+ensure_not_reactivated_vm([],_,Result)->
+    Result;
+ensure_not_reactivated_vm(_,_,{ok,WorkerHostId,WorkerVmId})->
+    {ok,WorkerHostId,WorkerVmId};
+ensure_not_reactivated_vm(_,_,{error,Err})->
+    {error,Err};
+ensure_not_reactivated_vm([{DeplId,_SpecId,_Vsn,_Date,_Time,HostId,VmId,_SdList,_Status}|T],IaasVm,check)->
+    Result=case rpc:call(IaasVm,iaas,allocate_vm,[],5000) of
+	       {badrpc,Err}->
+		   {error,[{badrpc,Err},?MODULE,?LINE]};
+	       {error,[no_free_vms,Module,Line]}-> 
+		   {error,[no_free_vms,Module,Line]};
+	       {ok,WorkerHostId,WorkerVmId}->	   
+		   case {WorkerHostId,WorkerVmId}=={HostId,VmId} of
+		       false->
+			   io:format("OK! not allocated = ~p~n",[{WorkerHostId,WorkerVmId,?MODULE,?LINE}]), 
+			  % if_db:deployment_delete(DeplId),
+			   {ok,WorkerHostId,WorkerVmId};
+		       true -> %already allocated
+			   io:format("Error! already allocated = ~p~n",[{WorkerHostId,WorkerVmId,?MODULE,?LINE}]), 
+			   if_db:deployment_delete(DeplId),
+			 %  rpc:call(IaasVm,iaas,free_vm,[list_to_atom(WorkerVmId++"@"++WorkerHostId)],5000),
+			   check
+		   end
+	   end,
+    ensure_not_reactivated_vm(T,IaasVm,Result).
     
 %% --------------------------------------------------------------------
 %% Function:create(ServiceId,Vsn,HostId,VmId)
@@ -165,39 +192,27 @@ delete_spec(AppId,AppVsn)->
 %% 
 %%
 %% --------------------------------------------------------------------
- % 1. Host running -> Vm running -> 3. Services running  == ok
-    % 1. Host running -> Vm running -> 3. Services not running -> start new deployment , delete old and store new
-    % 1  Host not running -> sd_delete(AllServices on Host) 
-    % 2. Vm not running -> sd_delete(AllServices on Vm) 
-    % 3. Host running ->  Vm not running ->  Vm not running
-    % 1. Host running ->  Vm not running -> Services running -> sd_delete(AllServices on Vm) , 
-
 check_update()->
-    case if_db:deployment_read_all() of
-	[]->
-	    [];
-	DeploymentInfoList ->  %[{DeplId,SpecId,Vsn,Date,Time,HostId,VmId,SdList,_Status}]
-	    [IaasVm]=if_db:sd_get("iaas"),
-	    AvailableComputers=rpc:call(IaasVm,iaas,computer_status,[available],10000),  
-	    NotAvailableComputers=rpc:call(IaasVm,iaas,computer_status,[not_available],10000),
-	    case lists:append(AvailableComputers,NotAvailableComputers) of
-		[]->
-		    [];
-		LostComputers->
-		    io:format(" LostComputers= ~p~n",[{LostComputers,?MODULE,?LINE}]),
-		    LostDeployments=act_lost_computers(DeploymentInfoList,LostComputers,[]),	 
-		    io:format(" LostDeployments= ~p~n",[{LostDeployments,?MODULE,?LINE}])
-	    end
-    end,
-    act_lost_deployments().
+    UpdateResult =case if_db:deployment_read_all() of
+			     []->
+				 [];
+			     DeploymentInfoList ->  %[{DeplId,SpecId,Vsn,Date,Time,HostId,VmId,SdList,_Status}]
+				 [IaasVm]=if_db:sd_get("iaas"),
+				 AvailableComputers=rpc:call(IaasVm,computer,status,[available],10000),  
+				 NotAvailableComputers=rpc:call(IaasVm,computer,status,[not_available],10000),
+				 LostComputers=lists:append(AvailableComputers,NotAvailableComputers),
+				 LostDeployments=act_lost_computers(DeploymentInfoList,LostComputers,[]),	 
+				 act_lost_deployments(LostDeployments,[])
+				     
+			 end,
+    UpdateResult.
 
-act_lost_computers([],_,LostServices)->
+ act_lost_computers([],_,LostServices)->
     LostServices;
-act_lost_computers([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],LostComputers,Acc)->
+ act_lost_computers([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],LostComputers,Acc)->
     NewAcc=case lists:member(HostId,LostComputers) of
 	       true->
 		   [{if_db:sd_delete(ServiceId,ServiceVsn,Vm),rpc:call(Vm,application,stop,[list_to_atom(ServiceId)]),ServiceId,ServiceVsn,Vm}||{ServiceId,ServiceVsn,Vm}<-SdList],
-		   if_db:deployment_update_status(DeplId,stopped),
 		   [{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|Acc];
 	       false->
 		   Acc
@@ -205,17 +220,11 @@ act_lost_computers([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}
     act_lost_computers(T,LostComputers,NewAcc).
     
 	    
-
-act_lost_deployments()->
-    LostDeployments=if_db:deployment_status(stopped),
-    act_lost_deployments(LostDeployments,[]).
-act_lost_deployments([],UpdateResult)->
-    UpdateResult;
-act_lost_deployments([{DeplId,AppId,AppVsn,_Date,_Time,_HostId,_VmId,_SdList,_Status}|T],Acc)->
+act_lost_deployments([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],Acc)->
     NewAcc=case  rpc:call(node(),control,deploy_app,[AppId,AppVsn]) of
 	       {ok,NewDeplId}->
 		   io:format("NewDeplId = ~p~n",[{NewDeplId,?MODULE,?LINE}]), 
-		   rpc:call(node(),control,delete_deployment,[DeplId],5000),
+		   rpc:call(node(),control,deployment_delete_deployment,[DeplId],5000),
 						%depricate_app(DeplId),
 		   timer:sleep(200),
 		   [{ok,NewDeplId,AppId,AppVsn}||Acc];
@@ -228,3 +237,83 @@ act_lost_deployments([{DeplId,AppId,AppVsn,_Date,_Time,_HostId,_VmId,_SdList,_St
 	   end,
     act_lost_deployments(T,NewAcc).
         
+
+check([],_,CheckResult)->
+    CheckResult;			 
+check([{DeplId,AppId,AppVsn,_Date,_Time,HostId,VmId,SdList,_Status}|T],LostComputers,Acc)->
+    % 1. Host running -> Vm running -> 3. Services running  == ok
+    % 1. Host running -> Vm running -> 3. Services not running -> start new deployment , delete old and store new
+    % 1  Host not running -> sd_delete(AllServices on Host) 
+    % 2. Vm not running -> sd_delete(AllServices on Vm) 
+    % 3. Host running ->  Vm not running ->  Vm not running
+    % 1. Host running ->  Vm not running -> Services running -> sd_delete(AllServices on Vm) , 
+
+   % AllServices=if_db:sd_read_all(), %{XServiceId,XVsn,XHostId,XVmId,XVm}
+%    io:format("AllServices ~p~n",[{AllServices,?MODULE,?LINE}]),
+    % NotAvailableComputers - remove all services from sd
+ %   NotAvailableComputers=[XHostId||{not_available,XHostId}<-StatusComputers],
+ %   io:format("NotAvailableComputers ~p~n",[{NotAvailableComputers,?MODULE,?LINE}]),
+ %   ServicesToRemove=[{if_db:sd_delete(XServiceId,XVsn,XVm),{XServiceId,XVsn,XVm}}||{XServiceId,XVsn,XHostId,_XVmId,XVm}<-AllServices,
+%										    lists:member(XHostId,NotAvailableComputers)],
+  %  io:format("ServicesToRemove ~p~n",[{ServicesToRemove,?MODULE,?LINE}]),
+
+    %% Doesnt work 
+    %% 
+    
+    
+    NewAcc=case net_adm:ping(list_to_atom(VmId++"@"++HostId)) of
+	       pong-> %ok
+		   case do_ping(SdList,ok) of
+		       ok->
+			   io:format("Services running = ~p~n",[{list_to_atom(VmId++"@"++HostId),?MODULE,?LINE}]), 
+			   Acc;
+		       error ->
+			   
+			   R=case rpc:call(node(),control,deploy_app,[AppId,AppVsn]) of
+				 {ok,NewDeplId}->
+				     io:format("NewDeplId = ~p~n",[{NewDeplId,?MODULE,?LINE}]), 
+				     rpc:call(node(),control,delete_deployment,[DeplId],5000),
+				     %depricate_app(DeplId),
+				     {ok,NewDeplId};
+				 {error,Err}->
+				     io:format(" {error,Err} = ~p~n",[{ {error,Err},?MODULE,?LINE}]), 
+				     {error,Err};
+				 {badrpc,Err}->
+				     io:format(" {badrpc,Err} = ~p~n",[{ {badrpc,Err},?MODULE,?LINE}]),
+				     {error,Err} 
+			     end,
+			   [R|Acc]		
+		   end;
+	       pang ->
+		   io:format("pang = ~p~n",[{ pang,?MODULE,?LINE}]), 
+		   [if_db:sd_delete(ServiceId,ServiceVsn,Vm)||{ServiceId,ServiceVsn,Vm}<-SdList],
+		   R=case  rpc:call(node(),control,deploy_app,[AppId,AppVsn]) of
+			 {ok,NewDeplId}->
+			     io:format("NewDeplId = ~p~n",[{NewDeplId,?MODULE,?LINE}]), 
+			     rpc:call(node(),control,deployment_delete_deployment,[DeplId],5000),
+			     %depricate_app(DeplId),
+			     {ok,NewDeplId};
+			 {error,Err}->
+			     io:format(" {error,Err} = ~p~n",[{ {error,Err},?MODULE,?LINE}]), 
+			     {error,Err};
+			 {badrpc,Err}->
+			     io:format(" {badrpc,Err} = ~p~n",[{ {badrpc,Err},?MODULE,?LINE}]), 
+			     {error,Err}
+		     end,
+		   [R|Acc]
+	   end,
+    check(T,NewAcc).
+    
+do_ping([],R)->
+    R;
+do_ping(_,error)->
+    error;
+do_ping([{ServiceId,ServiceVsn,Vm}|T],_)->
+    Result=case rpc:call(Vm,list_to_atom(ServiceId),ping,[],2000) of
+	       {pong,_,_}->
+		   ok;
+	       _ ->
+		   if_db:sd_delete(ServiceId,ServiceVsn,Vm),
+		   error
+	   end,
+    do_ping(T,Result).
