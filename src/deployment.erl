@@ -184,9 +184,10 @@ check_update()->
 		[]->
 		    [];
 		LostComputers->
-		    io:format(" LostComputers= ~p~n",[{LostComputers,?MODULE,?LINE}]),
+	%	    io:format(" LostComputers= ~p~n",[{LostComputers,?MODULE,?LINE}]),
 		    LostDeployments=act_lost_computers(DeploymentInfoList,LostComputers,[]),	 
-		    io:format(" LostDeployments= ~p~n",[{LostDeployments,?MODULE,?LINE}])
+	%	    io:format(" LostDeployments= ~p~n",[{LostDeployments,?MODULE,?LINE}])
+		    ok
 	    end
     end,
     act_lost_deployments().
