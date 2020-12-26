@@ -26,6 +26,10 @@
 %% --------------------------------------------------------------------
 -define(HbInterval,30*1000).
 
+-export([load_deployment_specs/3,
+	 read_deployment_specs/1
+	]).
+
 -export([create_service/4,delete_service/4,
 	 create_deployment_spec/3,
 	 delete_deployment_spec/2,
@@ -38,7 +42,7 @@
 -export([start/0,
 	 stop/0,
 	 ping/0,
-	 heart_beat/2
+	 heart_beat/1
 	]).
 
 %% gen_server callbacks
@@ -62,6 +66,11 @@ ping()->
     gen_server:call(?MODULE, {ping},infinity).
 
 %%-----------------------------------------------------------------------
+load_deployment_specs(DepSpecDir,GitUser,GitPassWd)->
+    gen_server:call(?MODULE, {load_deployment_specs,DepSpecDir,GitUser,GitPassWd},infinity). 
+read_deployment_specs(DepSpecDir)->
+    gen_server:call(?MODULE, {read_deployment_specs,DepSpecDir},infinity). 
+
 create_service(ServiceId,Vsn,HostId,VmId)->
     gen_server:call(?MODULE, {create_service,ServiceId,Vsn,HostId,VmId},infinity).    
 delete_service(ServiceId,Vsn,HostId,VmId)->
@@ -81,9 +90,8 @@ delete_deployment_spec(AppId,AppVsn)->
 read_deployment_spec(AppId,AppVsn)->
     gen_server:call(?MODULE, {read_deployment_spec,AppId,AppVsn},infinity).
 
-
-heart_beat(Interval,Result)->
-    gen_server:cast(?MODULE, {heart_beat,Interval,Result}).
+heart_beat(Interval)->
+    gen_server:cast(?MODULE, {heart_beat,Interval}).
 
 
 %% ====================================================================
@@ -117,6 +125,15 @@ init([]) ->
 handle_call({ping},_From,State) ->
     Reply={pong,node(),?MODULE},
     {reply, Reply, State};
+
+handle_call({read_deployment_specs,DepSpecDir},_From,State) ->
+    Reply=rpc:call(node(),deployment,read_deployment_specs,[DepSpecDir],2*5000),
+    {reply, Reply, State};
+
+handle_call({load_deployment_specs,DepSpecDir,GitUser,GitPassWd},_From,State) ->
+    Reply=rpc:call(node(),deployment,load_deployment_specs,[DepSpecDir,GitUser,GitPassWd],2*5000),
+    {reply, Reply, State};
+
 
 handle_call({create_service,ServiceId,Vsn,HostId,VmId},_From,State) ->
     Reply=rpc:call(node(),service,create,[ServiceId,Vsn,HostId,VmId],2*5000),
@@ -164,9 +181,8 @@ handle_call(Request, From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% -------------------------------------------------------------------
-handle_cast({heart_beat,Interval,_Result}, State) ->
- %   io:format("h_beat  ~p~n",[{time(),?MODULE,?LINE,Result}]),
-    spawn(fun()->h_beat(Interval) end),    
+handle_cast({heart_beat,Interval}, State) ->
+     spawn(fun()->h_beat(Interval) end),    
     {noreply, State};
 
 handle_cast(Msg, State) ->
@@ -211,23 +227,16 @@ code_change(_OldVsn, State, _Extra) ->
 %% Returns: non
 %% --------------------------------------------------------------------
 h_beat(Interval)->
-    R=rpc:call(node(),deployment,check_update,[],2*60*1000),
-    io:format("deployment,check_update ~p~n",[{R,time(),?MODULE,?LINE}]),
-   % Orphans=rpc:call(node(),deployment,orphans,[],20*1000),
-  %  io:format("Orphans = ~p~n",[{Orphans,time(),?MODULE,?LINE}]),
-  
-   
-    
-
-
-
-
-
-
+    case rpc:call(node(),iaas,machine_status,[all],3*1000) of
+	{badrpc,Reason}->
+	    % log as a ticket
+	    io:format("Log ticket ~p~n",[{badrpc,Reason,?MODULE,?LINE}]),
+	    ok;
+	Status->
+	    io:format("Status ~p~n",[{Status,?MODULE,?LINE}])   
+    end,
     timer:sleep(Interval),
-%    Result=rpc:call(node(),orchistrate,simple_campaign,[],15*1000),
-    Result=glurk,
-    rpc:cast(node(),?MODULE,heart_beat,[Interval,Result]).
+    rpc:cast(node(),?MODULE,heart_beat,[Interval]).
 
 %% --------------------------------------------------------------------
 %% Internal functions

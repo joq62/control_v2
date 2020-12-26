@@ -11,10 +11,6 @@
 %% --------------------------------------------------------------------
 
 %-compile(export_all).
--export([load_deployment_specs/3,
-	 read_deployment_specs/1
-	]).
-
 -export([orphans/0,
 	 deploy_app/2,
 	 depricate_app/1,
@@ -27,81 +23,7 @@
 %% ====================================================================
 %% External functions
 %% ====================================================================
-%% --------------------------------------------------------------------
-%% Function:create(ServiceId,Vsn,HostId,VmId)
-%% Description: Starts vm and deploys services 
-%% Returns: ok |{error,Err}
-%% --------------------------------------------------------------------
 
-read_app_specs(AppSpecDir)->
-    Result=case file:list_dir(AppSpecDir) of
-	       {ok,FileNames}->
-		   {ok,FileNames};
-	       {error,Reason} ->
-		   {error,Reason}
-	   end, 
-    Result.
-%% --------------------------------------------------------------------
-%% Function:create(ServiceId,Vsn,HostId,VmId)
-%% Description: Starts vm and deploys services 
-%% Returns: ok |{error,Err}
-%% --------------------------------------------------------------------
-
-load_app_specs(AppSpecDir,GitUser,GitPassWd)->
-     %% Get initial configuration
-    os:cmd("rm -rf "++AppSpecDir),
-    GitCmd="git clone https://"++GitUser++":"++GitPassWd++"@github.com/"++GitUser++"/"++AppSpecDir++".git",
-    os:cmd(GitCmd),
-    Result=case file:list_dir(AppSpecDir) of
-	       {ok,FileNames}->
-		   SpecFileNames=[filename:join(AppSpecDir,FileName)||FileName<-FileNames,
-					       ".app_spec"==filename:extension(FileName)],
-		   L1=[file:consult(FileName)||FileName<-SpecFileNames],
-		   L2=[Info||{ok,[Info]}<-L1],
-		   L2;
-	       {error,Reason} ->
-		   {error,Reason}
-	   end, 
-    Result.
-    
-%% --------------------------------------------------------------------
-%% Function:create(ServiceId,Vsn,HostId,VmId)
-%% Description: Starts vm and deploys services 
-%% Returns: ok |{error,Err}
-%% --------------------------------------------------------------------
-
-read_deployment_specs(DepSpecDir)->
-    Result=case file:list_dir(DepSpecDir) of
-	       {ok,FileNames}->
-		   {ok,FileNames};
-	       {error,Reason} ->
-		   {error,Reason}
-	   end, 
-    Result.
-%% --------------------------------------------------------------------
-%% Function:create(ServiceId,Vsn,HostId,VmId)
-%% Description: Starts vm and deploys services 
-%% Returns: ok |{error,Err}
-%% --------------------------------------------------------------------
-
-load_deployment_specs(DepSpecDir,GitUser,GitPassWd)->
-     %% Get initial configuration
-    os:cmd("rm -rf "++DepSpecDir),
-    GitCmd="git clone https://"++GitUser++":"++GitPassWd++"@github.com/"++GitUser++"/"++DepSpecDir++".git",
-    os:cmd(GitCmd),
-    Result=case file:list_dir(DepSpecDir) of
-	       {ok,FileNames}->
-		   SpecFileNames=[filename:join(DepSpecDir,FileName)||FileName<-FileNames,
-					       ".dep_spec"==filename:extension(FileName)],
-		   L1=[file:consult(FileName)||FileName<-SpecFileNames],
-		   L2=[Info||{ok,[Info]}<-L1],
-		   L2;
-	       {error,Reason} ->
-		   {error,Reason}
-	   end, 
-    Result.
-    
-    
 %% --------------------------------------------------------------------
 %% Function:create(ServiceId,Vsn,HostId,VmId)
 %% Description: Starts vm and deploys services 
