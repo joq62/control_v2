@@ -2,7 +2,7 @@ all:
 	rm -rf  *Mnesia erl_cra*;
 	rm -rf  *~ */*~;
 	rm -rf ebin/* test_ebin/* *.beam test_src/*.beam;
-	rm -rf cluster* server common dbase iaas deploy*;
+	rm -rf cluster* server common dbase iaas app_specs;
 	cp src/*.app ebin;
 	erlc -o ebin src/*.erl;
 doc_gen:
@@ -13,7 +13,7 @@ test:
 	rm -rf  *Mnesia erl_cra*;
 	rm -rf  *~ */*~;
 	rm -rf ebin/* test_ebin/* *.beam test_src/*.beam;
-	rm -rf cluster* server common dbase iaas deploy*;
+	rm -rf cluster* server common dbase iaas app_specs;
 #	control
 	cp src/*.app ebin;
 	erlc -o ebin src/*.erl;

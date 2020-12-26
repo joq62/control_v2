@@ -14,7 +14,7 @@
 
 %% --------------------------------------------------------------------
 %% Definitions
--define(DepSpecsDir,"deployment_specs").
+-define(AppSpecsDir,"app_specs").
 -define(GitUser,"joq62").
 -define(GitPassWd,"20Qazxsw20").
 %% --------------------------------------------------------------------
@@ -38,13 +38,13 @@ start()->
     ?assertEqual(ok,setup()),
     ?debugMsg("stop setup"),
 
-    ?debugMsg("Start load_specs"),
-    ?assertEqual(ok,load_specs()),
-    ?debugMsg("stop load_specs"),
+    ?debugMsg("Start load_app_specs"),
+    ?assertEqual(ok,load_app_specs()),
+    ?debugMsg("stop load_app_specs"),
 
-   ?debugMsg("Start read_specs"),
-    ?assertEqual(ok,read_specs()),
-    ?debugMsg("stop read_specs"),
+   ?debugMsg("Start read_app_specs"),
+    ?assertEqual(ok,read_app_specs()),
+    ?debugMsg("stop read_app_specs"),
 
     ?assertEqual(ok,cleanup()),
 
@@ -69,17 +69,47 @@ setup()->
 %% Description: Initiate the eunit tests, set upp needed processes etc
 %% Returns: non
 %% --------------------------------------------------------------------
-load_specs()->
+load_app_specs()->
 
-    io:format("~p~n",[control:load_deployment_specs(?DepSpecsDir,?GitUser,?GitPassWd)]),
+    ?assertEqual(ok,control:load_app_specs(?AppSpecsDir,?GitUser,?GitPassWd)),
+    ?assertEqual([{"server_a","1.0.0",
+		   [{host,"c0"},{vm_id,"server_100"},{vm_dir,"server_100"}],
+		   [{"common","1.0.0"},{"dbase","1.0.0"},{"server","1.0.0"}]},
+		  {"server_b","1.0.0",
+		   [{host,"c1"},{vm_id,"server_100"},{vm_dir,"server_100"}],
+		   [{"common","1.0.0"},{"dbase","1.0.0"},{"server","1.0.0"}]},
+		  {"server_c","1.0.0",
+		   [{host,"c2"},{vm_id,"server_100"},{vm_dir,"server_100"}],
+		   [{"common","1.0.0"},{"dbase","1.0.0"},{"server","1.0.0"}]},
+		  {"calc","1.0.0",
+		   [],
+		   [{"adder_service","1.0.0"},{"multi_service","1.0.0"},{"divi_service","1.0.0"}]}],
+		 if_db:app_spec_read_all()),
     ok.
 %% --------------------------------------------------------------------
 %% Function:start/0 
 %% Description: Initiate the eunit tests, set upp needed processes etc
 %% Returns: non
 %% --------------------------------------------------------------------
-read_specs()->
-    io:format("~p~n",[control:read_deployment_specs(?DepSpecsDir)]),
+read_app_specs()->
+    ?assertEqual([{"server_a","1.0.0",
+		   [{host,"c0"},{vm_id,"server_100"},{vm_dir,"server_100"}],
+		   [{"common","1.0.0"},{"dbase","1.0.0"},{"server","1.0.0"}]},
+		  {"server_b","1.0.0",
+		   [{host,"c1"},{vm_id,"server_100"},{vm_dir,"server_100"}],
+		   [{"common","1.0.0"},{"dbase","1.0.0"},{"server","1.0.0"}]},
+		  {"server_c","1.0.0",
+		   [{host,"c2"},{vm_id,"server_100"},{vm_dir,"server_100"}],
+		   [{"common","1.0.0"},{"dbase","1.0.0"},{"server","1.0.0"}]},
+		  {"calc","1.0.0",
+		   [],
+		   [{"adder_service","1.0.0"},{"multi_service","1.0.0"},{"divi_service","1.0.0"}]}],
+		 control:read_app_specs()),
+
+    ?assertEqual([{"server_b","1.0.0",
+		   [{host,"c1"},{vm_id,"server_100"},{vm_dir,"server_100"}],
+		   [{"common","1.0.0"},{"dbase","1.0.0"},{"server","1.0.0"}]}],
+		 control:read_app_spec("server_b","1.0.0")),
  %   
     ok.
 %% --------------------------------------------------------------------

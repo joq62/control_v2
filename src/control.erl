@@ -26,8 +26,9 @@
 %% --------------------------------------------------------------------
 -define(HbInterval,30*1000).
 
--export([load_deployment_specs/3,
-	 read_deployment_specs/1
+-export([load_app_specs/3,
+	 read_app_specs/0,
+	 read_app_spec/2
 	]).
 
 -export([create_service/4,delete_service/4,
@@ -66,10 +67,12 @@ ping()->
     gen_server:call(?MODULE, {ping},infinity).
 
 %%-----------------------------------------------------------------------
-load_deployment_specs(DepSpecDir,GitUser,GitPassWd)->
-    gen_server:call(?MODULE, {load_deployment_specs,DepSpecDir,GitUser,GitPassWd},infinity). 
-read_deployment_specs(DepSpecDir)->
-    gen_server:call(?MODULE, {read_deployment_specs,DepSpecDir},infinity). 
+load_app_specs(AppSpecsDir,GitUser,GitPassWd)->
+    gen_server:call(?MODULE, {load_app_specs,AppSpecsDir,GitUser,GitPassWd},infinity). 
+read_app_specs()->
+    gen_server:call(?MODULE, {read_app_specs},infinity). 
+read_app_spec(AppId,AppVsn)->
+    gen_server:call(?MODULE, {read_app_spec,AppId,AppVsn},infinity). 
 
 create_service(ServiceId,Vsn,HostId,VmId)->
     gen_server:call(?MODULE, {create_service,ServiceId,Vsn,HostId,VmId},infinity).    
@@ -126,12 +129,15 @@ handle_call({ping},_From,State) ->
     Reply={pong,node(),?MODULE},
     {reply, Reply, State};
 
-handle_call({read_deployment_specs,DepSpecDir},_From,State) ->
-    Reply=rpc:call(node(),deployment,read_deployment_specs,[DepSpecDir],2*5000),
+handle_call({read_app_specs},_From,State) ->
+    Reply=rpc:call(node(),deployment,read_app_specs,[],2*5000),
+    {reply, Reply, State};
+handle_call({read_app_spec,AppId,AppVsn},_From,State) ->
+    Reply=rpc:call(node(),deployment,read_app_spec,[AppId,AppVsn],2*5000),
     {reply, Reply, State};
 
-handle_call({load_deployment_specs,DepSpecDir,GitUser,GitPassWd},_From,State) ->
-    Reply=rpc:call(node(),deployment,load_deployment_specs,[DepSpecDir,GitUser,GitPassWd],2*5000),
+handle_call({load_app_specs,AppSpecsDir,GitUser,GitPassWd},_From,State) ->
+    Reply=rpc:call(node(),deployment,load_app_specs,[AppSpecsDir,GitUser,GitPassWd],2*5000),
     {reply, Reply, State};
 
 
