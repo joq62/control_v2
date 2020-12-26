@@ -28,7 +28,10 @@
 
 -export([load_app_specs/3,
 	 read_app_specs/0,
-	 read_app_spec/2
+	 read_app_spec/1,
+	 load_service_specs/3,
+	 read_service_specs/0,
+	 read_service_spec/1
 	]).
 
 -export([create_service/4,delete_service/4,
@@ -71,8 +74,16 @@ load_app_specs(AppSpecsDir,GitUser,GitPassWd)->
     gen_server:call(?MODULE, {load_app_specs,AppSpecsDir,GitUser,GitPassWd},infinity). 
 read_app_specs()->
     gen_server:call(?MODULE, {read_app_specs},infinity). 
-read_app_spec(AppId,AppVsn)->
-    gen_server:call(?MODULE, {read_app_spec,AppId,AppVsn},infinity). 
+read_app_spec(AppId)->
+    gen_server:call(?MODULE, {read_app_spec,AppId},infinity). 
+
+load_service_specs(AppSpecsDir,GitUser,GitPassWd)->
+    gen_server:call(?MODULE, {load_service_specs,AppSpecsDir,GitUser,GitPassWd},infinity). 
+read_service_specs()->
+    gen_server:call(?MODULE, {read_service_specs},infinity). 
+read_service_spec(AppId)->
+    gen_server:call(?MODULE, {read_service_spec,AppId},infinity). 
+
 
 create_service(ServiceId,Vsn,HostId,VmId)->
     gen_server:call(?MODULE, {create_service,ServiceId,Vsn,HostId,VmId},infinity).    
@@ -132,12 +143,23 @@ handle_call({ping},_From,State) ->
 handle_call({read_app_specs},_From,State) ->
     Reply=rpc:call(node(),deployment,read_app_specs,[],2*5000),
     {reply, Reply, State};
-handle_call({read_app_spec,AppId,AppVsn},_From,State) ->
-    Reply=rpc:call(node(),deployment,read_app_spec,[AppId,AppVsn],2*5000),
+handle_call({read_app_spec,AppId},_From,State) ->
+    Reply=rpc:call(node(),deployment,read_app_spec,[AppId],2*5000),
     {reply, Reply, State};
 
 handle_call({load_app_specs,AppSpecsDir,GitUser,GitPassWd},_From,State) ->
     Reply=rpc:call(node(),deployment,load_app_specs,[AppSpecsDir,GitUser,GitPassWd],2*5000),
+    {reply, Reply, State};
+
+handle_call({read_service_specs},_From,State) ->
+    Reply=rpc:call(node(),deployment,read_service_specs,[],2*5000),
+    {reply, Reply, State};
+handle_call({read_service_spec,Id},_From,State) ->
+    Reply=rpc:call(node(),deployment,read_service_spec,[Id],2*5000),
+    {reply, Reply, State};
+
+handle_call({load_service_specs,SpecsDir,GitUser,GitPassWd},_From,State) ->
+    Reply=rpc:call(node(),deployment,load_service_specs,[SpecsDir,GitUser,GitPassWd],2*5000),
     {reply, Reply, State};
 
 
