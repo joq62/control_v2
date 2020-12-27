@@ -88,95 +88,20 @@ start()->
 %% Returns: non
 %% --------------------------------------------------------------------
 actual_test()->
-    
-    % Per app_spec actual state
-    % Actual state
-    ?assertEqual([{"calc_100.app_spec","1.0.0",
-		   [],
-		   ["adder_100.service_spec","multi_100.service_spec","divi_100.service_spec"]},
-		  {"server_c_100.app_spec","1.0.0",
-		   [{host,"c2"},{vm_id,"server_100"},{vm_dir,"server_100"}],
-		   ["common_100.service_spec","dbase_100.service_spec","server_100.service_spec"]},
-		  {"server_a_100.app_spec","1.0.0",
-		   [{host,"c0"},{vm_id,"server_100"},{vm_dir,"server_100"}],
-		   ["common_100.service_spec","dbase_100.service_spec","server_100.service_spec"]},
-		  {"server_b_100.app_spec","1.0.0",
-		   [{host,"c1"},{vm_id,"server_100"},{vm_dir,"server_100"}],
-		   ["common_100.service_spec","dbase_100.service_spec","server_100.service_spec"]}],
-		 if_db:call(db_app_spec,read_all,[])),
-    ?assertEqual(["calc_100.app_spec",
-		  "server_c_100.app_spec",
-		  "server_a_100.app_spec",
-		  "server_b_100.app_spec"],
-		 [AppSpecId||{AppSpecId,_AppSpecVsn,_Directive,_ServiceSpecs}<-if_db:call(db_app_spec,read_all,[])]),
-    
+    ?assertEqual(["server_c_100.app_spec"],
+		 deployment:missing_apps()),
 
-    ?assertEqual([{"common","1.0.0","server_a_100.app_spec","1.0.0","c0","server_100",'server_100@c0'},
-		  {"server","1.0.0","server_a_100.app_spec","1.0.0","c0","server_100",'server_100@c0'},
-		  {"dbase","1.0.0","server_a_100.app_spec","1.0.0","c0","server_100",'server_100@c0'}],
-		 if_db:call(db_sd,app_spec,["server_a_100.app_spec"])),
-    _AppInfo_Actual_server_a=if_db:call(db_sd,app_spec,["server_a_100.app_spec"]),
-    % Wanted state
-    % Directives 
-    % 1. [] -> Any host 
-    % 2. [{host,HostId}] -> Check if services are running tight Host
-    % 3. [{host,HostId},{vm_id,VmId}] -> check hostid + vmid
-    %
-    ?assertEqual([{"server_a_100.app_spec","1.0.0",
-		   [{host,"c0"},{vm_id,"server_100"},{vm_dir,"server_100"}],
-		   ["common_100.service_spec","dbase_100.service_spec","server_100.service_spec"]}],
-		 if_db:call(db_app_spec,read,["server_a_100.app_spec"])),
-    [AppInfoWanted_server_a]= if_db:call(db_app_spec,read,["server_a_100.app_spec"]),
-     ?assertEqual([{"common","1.0.0","server_a_100.app_spec","c0","server_100",'server_100@c0'},
-		   {"dbase","1.0.0","server_a_100.app_spec","c0","server_100",'server_100@c0'},
-		   {"server","1.0.0","server_a_100.app_spec","c0","server_100",'server_100@c0'}],
-		  wanted_service_info( AppInfoWanted_server_a)),
-    [Calc]= if_db:call(db_app_spec,read,["calc_100.app_spec"]),
-     ?assertEqual([{"adder_service","1.0.0","calc_100.app_spec",host_any,vm_id_any,vm_any},
-		   {"multi_service","1.0.0","calc_100.app_spec",host_any,vm_id_any,vm_any},
-		   {"divi_service","1.0.0","calc_100.app_spec",host_any,vm_id_any,vm_any}],
-		  wanted_service_info(Calc)),
-    
-    
+    ?assertEqual(["A11"],
+	       deployment:depricated_apps()),
+
+
     ok.
+
 %% --------------------------------------------------------------------
 %% Function:start/0 
 %% Description: Initiate the eunit tests, set upp needed processes etc
 %% Returns: non
 %% --------------------------------------------------------------------
-wanted_service_info({AppId,_AppVns,Directive,ServicSpecs})->
- %   {"divi_100.service_spec","divi_service","1.0.0",
- %    {application,start,[divi_service]},
- %    "https://github.com/joq62/divi_service.git"},
-%[{"common","1.0.0","server_a_100.app_spec","1.0.0","c0","server_100",'server_100@c0'},    
-    HostId=case lists:keyfind(host,1,Directive) of
-	       false->
-		   host_any;
-	       {host,XHost}->
-		   XHost
-	   end,
-    VmId=case lists:keyfind(vm_id,1,Directive) of
-	       false->
-		   vm_id_any;
-	       {vm_id,XVmId}->
-		   XVmId
-	   end,
-    Vm=case {HostId,VmId} of
-	   {host_any, vm_id_any}->
-	       vm_any;
-	   {HostId,VmId}->
-	       list_to_atom(VmId++"@"++HostId)
-       end,
-   % io:format("ServiceSpecs ~p~n",[ServicSpecs]),
-    
-    ServiceInfo=lists:append([if_db:call(db_service_def,read,[ServiceSpec])||ServiceSpec<-ServicSpecs]),
-   % io:format("ServiceInfo ~p~n",[ServiceInfo]),
- %   C=[X||X<-ServiceInfo],
-  %  io:format("C ~p~n",[C]),
- %   C.
-    [{ServiceId,ServiceVsn,AppId,HostId,VmId,Vm}||{_ServiceSpec,ServiceId,ServiceVsn,_StartCmd,_GitPath}<-ServiceInfo].
-    
-
 setup_actual_test()->
     
     % Fake 
@@ -229,7 +154,7 @@ setup_actual_test()->
 wanted_test()->
     % read all appspecs
     ?assertEqual([{"calc_100.app_spec","1.0.0",
-		   [],
+		   [{host,any},{vm_id,any},{vm_dir,any}],
 		   ["adder_100.service_spec","multi_100.service_spec","divi_100.service_spec"]},
 		  {"server_c_100.app_spec","1.0.0",
 		   [{host,"c2"},{vm_id,"server_100"},{vm_dir,"server_100"}],
@@ -326,7 +251,7 @@ load_app_specs()->
 
     ?assertEqual(ok,control:load_app_specs(?AppSpecsDir,?GitUser,?GitPassWd)),
     ?assertEqual([{"calc_100.app_spec","1.0.0",
-		   [],
+		   [{host,any},{vm_id,any},{vm_dir,any}],
 		   ["adder_100.service_spec","multi_100.service_spec","divi_100.service_spec"]},
 		  {"server_c_100.app_spec","1.0.0",
 		   [{host,"c2"},{vm_id,"server_100"},{vm_dir,"server_100"}],
@@ -346,7 +271,7 @@ load_app_specs()->
 %% --------------------------------------------------------------------
 read_app_specs()->
     ?assertEqual([{"calc_100.app_spec","1.0.0",
-		   [],
+		   [{host,any},{vm_id,any},{vm_dir,any}],
 		   ["adder_100.service_spec","multi_100.service_spec","divi_100.service_spec"]},
 		  {"server_c_100.app_spec","1.0.0",
 		   [{host,"c2"},{vm_id,"server_100"},{vm_dir,"server_100"}],
