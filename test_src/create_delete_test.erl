@@ -39,13 +39,21 @@ start()->
     ?assertEqual(ok,setup()),
     ?debugMsg("stop setup"),
 
-    ?debugMsg("Start create"),
-    ?assertEqual(ok,create()),
-    ?debugMsg("stop create"),
+    ?debugMsg("Start create1"),
+    ?assertEqual(ok,create1()),
+    ?debugMsg("stop create1"),
 
-    ?debugMsg("Start delete"),
-    ?assertEqual(ok,delete()),
-    ?debugMsg("stop "),
+    ?debugMsg("Start delete1"),
+    ?assertEqual(ok,delete1()),
+    ?debugMsg("stop delete1"),
+
+    ?debugMsg("Start create2"),
+    ?assertEqual(ok,create2()),
+    ?debugMsg("stop create2"),
+
+    ?debugMsg("Start delete2"),
+    ?assertEqual(ok,delete2()),
+    ?debugMsg("stop delete2"),
 
    
     ?assertEqual(ok,cleanup()),
@@ -76,7 +84,41 @@ setup()->
 %% Description: Initiate the eunit tests, set upp needed processes etc
 %% Returns: non
 %% --------------------------------------------------------------------
-create()->
+create2()->
+    ?assertEqual(ok,wait_for_hosts(10,1000,error)),
+    CreateResult=deployment:create_application("test1_100.app_spec"),
+    io:format("CreateResult ~p~n",[CreateResult]),
+    ?assertMatch({ok,"test1_100.app_spec","c0","test1_100",'test1_100@c0'},CreateResult),
+           %      {ok,"calc_100.app_spec","c0","calc_100",'calc_100@c0'}
+    [Vm1|_]=if_db:call(db_sd,get,["multi_service"]),
+    io:format("Vm1 ~p~n",[Vm1]),
+    ?assertEqual(440,rpc:call(Vm1,multi_service,multi,[20,22],2000)),
+    ok.
+
+%% --------------------------------------------------------------------
+%% Function:start/0 
+%% Description: Initiate the eunit tests, set upp needed processes etc
+%% Returns: non
+%% -------------------------------------------------------------------
+delete2()->
+    [Vm1|_]=if_db:call(db_sd,get,["multi_service"]),
+    io:format("Vm1 ~p~n",[Vm1]),
+    ?assertEqual(440,rpc:call(Vm1,multi_service,multi,[20,22],2000)),
+
+    DeleteResult=deployment:delete_application("test1_100.app_spec"),
+    io:format("DeleteResult ~p~n",[DeleteResult]),
+    ?assertMatch(ok,DeleteResult),
+    []=if_db:call(db_sd,get,["multi_service"]),
+    ?assertMatch({badrpc,_},rpc:call(Vm1,multi_service,multi,[20,22],2000)),
+
+   ok.
+
+%% --------------------------------------------------------------------
+%% Function:start/0 
+%% Description: Initiate the eunit tests, set upp needed processes etc
+%% Returns: non
+%% --------------------------------------------------------------------
+create1()->
 %    rand_hosts(20),
     ?assertEqual(ok,wait_for_hosts(10,1000,error)),
     CreateResult=deployment:create_application("calc_100.app_spec"),
@@ -109,7 +151,7 @@ wait_for_hosts(N,T,Msg)->
 %% Description: Initiate the eunit tests, set upp needed processes etc
 %% Returns: non
 %% -------------------------------------------------------------------
-delete()->
+delete1()->
 
     [Vm1|_]=if_db:call(db_sd,get,["adder_service"]),
     ?assertEqual(42,rpc:call(Vm1,adder_service,add,[20,22],2000)),

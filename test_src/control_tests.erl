@@ -33,6 +33,10 @@ start()->
     ?debugMsg("Start print_status"),
     spawn(fun()->print_status() end),
 
+    ?debugMsg("Start dbase_test"),
+    ?assertEqual(ok,dbase_test:start()),
+    ?debugMsg("stop dbase_test"),
+
     ?debugMsg("Start deploy_test"),
     ?assertEqual(ok,deploy_test:start()),
     ?debugMsg("stop deploy_test"),
@@ -61,6 +65,8 @@ setup()->
     ?assertEqual(ok,boot_test:start()),
     ?debugMsg("stop boot_test"),
     ?assertEqual(ok,application:start(control)),
+
+    
     ok.
 
 %% --------------------------------------------------------------------
