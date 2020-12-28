@@ -37,6 +37,10 @@ start()->
     ?assertEqual(ok,deploy_test:start()),
     ?debugMsg("stop deploy_test"),
 
+    ?debugMsg("Start create_delete_test"),
+    ?assertEqual(ok,create_delete_test:start()),
+    ?debugMsg("stop create_delete_test"),
+
       %% End application tests
   
     cleanup(),

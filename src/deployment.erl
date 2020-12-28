@@ -29,7 +29,8 @@
 	 depricated_apps/0,
 
 	 create_application/1,
-	 delete_application/1
+	 delete_application/1,
+	 random_host/0
 	 
 	]).
 
@@ -52,7 +53,7 @@
 create_application(AppSpec)->
     Result=case if_db:call(db_app_spec,read,[AppSpec]) of
 	       [{AppSpec,AppVsn,Directive,ServiceSpecs}]->
-		   case directive_info(AppSpec,AppVsn,Directive) of
+		   case directive_info(AppSpec,Directive) of
 		       [{ok,HostId},{ok,VmId},{ok,VmDir}]->
 			   case vm:create(HostId,VmId,VmDir,?Cookie) of
 			       {error,Reason}->
@@ -63,7 +64,9 @@ create_application(AppSpec)->
 									      R/=ok],
 				   case CheckAllStarted of
 				       []->
-					   [if_db:call(db_sd,create,[XServiceId,XServiceVsn,AppSpec,AppVsn,HostId,VmId,Vm])||{ok,XServiceId,XServiceVsn}<-CreateResult];
+					   [{if_db:call(db_sd,create,[XServiceId,XServiceVsn,AppSpec,AppVsn,HostId,VmId,Vm]),XServiceId,XServiceVsn,Vm}||{ok,XServiceId,XServiceVsn}<-CreateResult],
+				     {ok,AppSpec,HostId,VmId,Vm};
+					   
 				       _->
 					   {error,[create_application,CheckAllStarted,?MODULE,?LINE]}
 				   end
@@ -77,45 +80,43 @@ create_application(AppSpec)->
     Result.
 
 random_host()->
-    RunningHosts=if_db:call(db_server,status,[running]),
-    L=lists:flatlength(RunningHosts),
-    Position=rand:uniform(L),
-    lists:nth(Position,RunningHosts).
+    Result= case if_db:call(db_server,status,[running]) of
+		[]->
+		    {error,[no_running_hosts_available]};
+		RunningHosts->
+		   % io:format("RunningHosts ~p~n",[RunningHosts]),
+		    NumHosts=lists:flatlength(RunningHosts),
+		  %  io:format("NumHosts ~p~n",[NumHosts]),
+		    Position=rand:uniform(NumHosts),
+		    {HostId,running}=lists:nth(Position,RunningHosts),
+		  %  io:format("HostId ~p~n",[HostId]),
+		    {ok,HostId}
+	    end,
+    Result.
 
-directive_info(AppSpec,AppVsn,Directive)->
-    lists:keyfind(host,1,Directive),
+directive_info(AppSpec,Directive)->
     VmIdResult=case lists:keyfind(vm_id,1,Directive) of
 		   {vm_id,any}->
 		       [Name1,"app_spec"]=string:split(AppSpec,["."]),
-		       VsnStr1=misc_cmn:vsn_to_string(AppVsn),
-		       {ok,Name1++"_"++VsnStr1};
+		       {ok,Name1};
 		   {vm_id,VmId}->
 		       {ok,VmId}
 	       end,
     VmDirResult=case lists:keyfind(vm_dir,1,Directive) of
-		    {vm_id,any}->
+		    {vm_dir,any}->
 			[Name2,"app_spec"]=string:split(AppSpec,["."]),
-			VsnStr2=misc_cmn:vsn_to_string(AppVsn),
-			{ok,Name2++"_"++VsnStr2};
+			{ok,Name2};
 		    {vm_dir,VmDir}->
 			{ok,VmDir}
 		end,
     HostIdResult=case lists:keyfind(host,1,Directive) of
 		     {host,any}->
-			 case random_host() of
-			     []->
-				 {error,[no_hosts_available]};
-			     HostIdRandom->
-				 {ok,HostIdRandom}
-			 end;
+			 random_host();
 		     {host,HostId}->
 			 {ok, HostId}
 		 end,
+    io:format("HostIdResult,VmIdResult,VmDirResult ~p~n",[{HostIdResult,VmIdResult,VmDirResult}]),
     [HostIdResult,VmIdResult,VmDirResult].
-    
-	    
-
-    
     
 %% --------------------------------------------------------------------
 %% Function:create(ServiceId,Vsn,HostId,VmId)
@@ -134,7 +135,7 @@ delete_application(AppSpec)->
 		% Stop the vm
 		   rpc:call(Vm,init,stop,[],2000),
 	       % Remove from sd discovery	       
-	       [db_if:call(db_sd,delete,[ServiceId,ServiceVsn,XVm])||
+	       [if_db:call(db_sd,delete,[ServiceId,ServiceVsn,XVm])||
 		   {ServiceId,ServiceVsn,_,_,_,_,XVm}<-ServicesList],
 	       ok
        end,
