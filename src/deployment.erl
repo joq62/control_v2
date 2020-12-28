@@ -64,7 +64,7 @@ create_application(AppSpec)->
 									      R/=ok],
 				   case CheckAllStarted of
 				       []->
-					   [{if_db:call(db_sd,create,[XServiceId,XServiceVsn,AppSpec,AppVsn,HostId,VmId,Vm]),XServiceId,XServiceVsn,Vm}||{ok,XServiceId,XServiceVsn}<-CreateResult],
+					   [{if_db:call(db_sd,create,[XServiceId,XServiceVsn,AppSpec,AppVsn,HostId,VmId,VmDir,Vm]),XServiceId,XServiceVsn,Vm}||{ok,XServiceId,XServiceVsn}<-CreateResult],
 				     {ok,AppSpec,HostId,VmId,Vm};
 					   
 				       _->
@@ -128,7 +128,7 @@ delete_application(AppSpec)->
 	       []->
 		   {error,[eexists,AppSpec]};
 	       ServicesList->
-		   [{_ServiceId,_ServiceVsn,_AppSpec,_AppVsn,_VmId,VmDir,Vm}|_]=ServicesList,
+		   [{_ServiceId,_ServiceVsn,_AppSpec,_AppVsn,_HostId,_VmId,VmDir,Vm}|_]=ServicesList,
 		   
 		   % rm vm dir
 		   rpc:call(Vm,file,del_dir_r,[VmDir],2000),

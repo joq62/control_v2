@@ -54,21 +54,34 @@ start()->
 %% --------------------------------------------------------------------
 setup()->
     ?assertEqual(ok,clone_start("common")),
-     ?assertEqual(ok,clone_start("dbase")),
+    ?assertEqual(ok,clone_start("dbase")),
     ?assertEqual(ok,clone_start("server")),
+ 
     server:preload_dbase(?ClusterConfigDir,?ClusterConfigFileName,?GitUser,?GitPassWd),
-    ?assertEqual(ok,clone_start("iaas")),
 
     % check if server has started dbase
     ?assertMatch([{"c2",_,_,"192.168.0.202",22,not_available},
 		  {"c1",_,_,"192.168.0.201",22,not_available},
 		  {"c0",_,_,"192.168.0.200",22,not_available}],
-		 if_db:server_read_all()),
+		 if_db:call(db_server,read_all,[])),
     ?assertMatch([{_,_}],
-		 if_db:passwd_read_all()),
+		 if_db:call(db_passwd,read_all,[]),
 
     ok.
 
+%% --------------------------------------------------------------------
+%% Function:start/0 
+%% Description: Initiate the eunit tests, set upp needed processes etc
+%% Returns: non
+%% --------------------------------------------------------------------
+preload_dbase(ClusterConfigDir,ClusterConfigFileName,GitUser,GitPassWd)->
+ %% Get initial configuration
+    os:cmd("rm -rf "++ClusterConfigDir),
+    GitCmd="git clone https://"++GitUser++":"++GitPassWd++"@github.com/"++GitUser++"/"++ClusterConfigDir++".git",
+    os:cmd(GitCmd),
+    ConfigFilePath=filename:join([".",ClusterConfigDir,ClusterConfigFileName]),
+    {ok,Info}=file:consult(ConfigFilePath),
+    rpc:call(node(),dbase,init_table_info,[Info]).
 %% --------------------------------------------------------------------
 %% Function:start/0 
 %% Description: Initiate the eunit tests, set upp needed processes etc
