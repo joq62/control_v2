@@ -192,5 +192,19 @@ service_info([{AppId,AppVsn,Constraints,ServiceSpecs}|T],Acc)->
 %% -------------------------------------------------------------------
 
 cleanup()->
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["adder_service","1.0.0",'calc_100@c0'])),
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["divi_service","1.0.0",'calc_100@c0'])),
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["multi_service","1.0.0",'calc_100@c0'])),
+
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["common","1.0.0",'server_100@c0'])),
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["dbase","1.0.0",'server_100@c0'])),
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["server","1.0.0",'server_100@c0'])),
+
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["common","1.0.0",'server_100@c1'])),
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["dbase","1.0.0",'server_100@c1'])),
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["server","1.0.0",'server_100@c1'])),
+
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["S1","1.2.3",'server_100@c0'])),
+    ?assertEqual({atomic,ok},if_db:call(db_sd,delete,["S1","1.2.3",'server_100@c1'])),
 
     ok.
